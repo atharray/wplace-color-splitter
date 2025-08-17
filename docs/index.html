@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixel Art Color Extractor</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #36393f;
+            min-height: 100vh;
+            color: #dcddde;
+        }
+        
+        .main-container {
+            background: #2f3136;
+            border-radius: 15px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.24);
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .upload-area {
+            border: 2px dashed #4f545c;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: #40444b;
+        }
+        
+        .upload-area:hover {
+            border-color: #7289da;
+            background: rgba(114, 137, 218, 0.1);
+        }
+        
+        .upload-area.dragover {
+            border-color: #43b581;
+            background: rgba(67, 181, 129, 0.1);
+        }
+        
+        #fileInput {
+            display: none;
+        }
+        
+        .preview-container {
+            max-width: 300px;
+            margin: 0 auto;
+        }
+        
+        .preview-image {
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .color-palette {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 15px;
+        }
+        
+        .color-swatch {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            display: inline-block;
+        }
+        
+        .progress-container {
+            margin-top: 20px;
+        }
+        
+        .color-info {
+            background: rgba(114, 137, 218, 0.15);
+            border-left: 4px solid #7289da;
+            padding: 15px;
+            border-radius: 0 8px 8px 0;
+            margin: 20px 0;
+        }
+        
+        .generated-images {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .color-layer {
+            text-align: center;
+            background: #40444b;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .color-layer img {
+            max-width: 100%;
+            border-radius: 4px;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="%23f0f0f0"><rect width="10" height="10" fill="%23fff"/><rect x="10" y="10" width="10" height="10" fill="%23fff"/></svg>');
+        }
+        
+        .color-layer small {
+            font-size: 0.75rem;
+            color: #72767d;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="main-container p-4">
+            <div class="text-center mb-4">
+                <h1 class="display-4 text-light mb-3">
+                    <i class="fas fa-palette me-3" style="color: #7289da;"></i>Pixel Art Color Extractor
+                </h1>
+                <p class="lead" style="color: #b9bbbe;">Extract individual colors from pixel art images into separate PNG layers</p>
+            </div>
+
+            <div class="row">
+                <div class="col-md-8 offset-md-2">
+                    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+                        <i class="fas fa-cloud-upload-alt fa-3x mb-3" style="color: #72767d;"></i>
+                        <h4 style="color: #dcddde;">Drop your pixel art here or click to browse</h4>
+                        <p style="color: #72767d;">Supports PNG, JPG, GIF files</p>
+                        <input type="file" id="fileInput" accept="image/*">
+                    </div>
+                </div>
+            </div>
+
+            <div id="imagePreview" class="text-center mt-4" style="display: none;">
+                <div class="preview-container">
+                    <img id="previewImg" class="preview-image" alt="Preview">
+                </div>
+            </div>
+
+            <div id="colorInfo" style="display: none;">
+                <div class="color-info">
+                    <h5 style="color: #dcddde;"><i class="fas fa-info-circle me-2"></i>Image Analysis</h5>
+                    <p class="mb-2" style="color: #b9bbbe;">Colors detected: <span id="colorCount" class="fw-bold" style="color: #7289da;"></span></p>
+                    <div id="colorPalette" class="color-palette"></div>
+                </div>
+                
+                <div class="text-center">
+                    <button id="generateBtn" class="btn btn-lg" style="background: #43b581; border: none; color: white;">
+                        <i class="fas fa-magic me-2"></i>Generate Color Layers
+                    </button>
+                </div>
+            </div>
+
+            <div id="progressContainer" class="progress-container" style="display: none;">
+                <div class="d-flex align-items-center mb-2">
+                    <h6 class="mb-0 me-3" style="color: #dcddde;">Processing:</h6>
+                    <div id="progressText" style="color: #72767d;"></div>
+                </div>
+                <div class="progress mb-3" style="background-color: #40444b;">
+                    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%; background-color: #7289da;"></div>
+                </div>
+            </div>
+
+            <div id="results" style="display: none;">
+                <div class="alert d-flex align-items-center" style="background-color: rgba(67, 181, 129, 0.2); border: 1px solid #43b581; color: #dcddde;">
+                    <i class="fas fa-check-circle me-2" style="color: #43b581;"></i>
+                    <div>
+                        Successfully generated <span id="resultCount"></span> color layers!
+                        <button id="downloadZip" class="btn btn-sm ms-3" style="background: #7289da; border: none; color: white;">
+                            <i class="fas fa-download me-1"></i>Download ZIP
+                        </button>
+                    </div>
+                </div>
+                
+                <h5 style="color: #dcddde;"><i class="fas fa-images me-2"></i>Generated Color Layers</h5>
+                <div id="generatedImages" class="generated-images"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        let originalImage = null;
+        let extractedColors = [];
+        let colorLayers = [];
+
+        // File upload handling
+        const fileInput = document.getElementById('fileInput');
+        const uploadArea = document.querySelector('.upload-area');
+        const imagePreview = document.getElementById('imagePreview');
+        const previewImg = document.getElementById('previewImg');
+        const colorInfo = document.getElementById('colorInfo');
+        const generateBtn = document.getElementById('generateBtn');
+
+        // Drag and drop functionality
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            if (!file.type.startsWith('image/')) {
+                alert('Please select an image file.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    originalImage = img;
+                    previewImg.src = e.target.result;
+                    imagePreview.style.display = 'block';
+                    analyzeColors(img);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function analyzeColors(img) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const pixels = imageData.data;
+            const colorMap = new Map();
+
+            // Extract unique colors
+            for (let i = 0; i < pixels.length; i += 4) {
+                const r = pixels[i];
+                const g = pixels[i + 1];
+                const b = pixels[i + 2];
+                const a = pixels[i + 3];
+                
+                // Skip fully transparent pixels
+                if (a === 0) continue;
+                
+                const colorKey = `${r},${g},${b},${a}`;
+                if (!colorMap.has(colorKey)) {
+                    colorMap.set(colorKey, {r, g, b, a, count: 0});
+                }
+                colorMap.get(colorKey).count++;
+            }
+
+            extractedColors = Array.from(colorMap.values());
+            displayColorInfo();
+        }
+
+        function displayColorInfo() {
+            document.getElementById('colorCount').textContent = extractedColors.length;
+            
+            const palette = document.getElementById('colorPalette');
+            palette.innerHTML = '';
+            
+            extractedColors.forEach(color => {
+                const swatch = document.createElement('div');
+                swatch.className = 'color-swatch';
+                swatch.style.backgroundColor = `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a/255})`;
+                swatch.title = `RGB(${color.r}, ${color.g}, ${color.b}) Alpha: ${color.a}`;
+                palette.appendChild(swatch);
+            });
+            
+            colorInfo.style.display = 'block';
+        }
+
+        generateBtn.addEventListener('click', generateColorLayers);
+
+        function generateColorLayers() {
+            if (!originalImage || extractedColors.length === 0) return;
+            
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            const results = document.getElementById('results');
+            
+            progressContainer.style.display = 'block';
+            results.style.display = 'none';
+            colorLayers = [];
+            
+            let processed = 0;
+            const total = extractedColors.length;
+            
+            extractedColors.forEach((color, index) => {
+                setTimeout(() => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = originalImage.width;
+                    canvas.height = originalImage.height;
+                    
+                    // Draw original image
+                    ctx.drawImage(originalImage, 0, 0);
+                    
+                    // Get image data
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const pixels = imageData.data;
+                    
+                    // Create new image data for this color only
+                    const newImageData = ctx.createImageData(canvas.width, canvas.height);
+                    const newPixels = newImageData.data;
+                    
+                    // Copy only pixels of this specific color
+                    for (let i = 0; i < pixels.length; i += 4) {
+                        if (pixels[i] === color.r && 
+                            pixels[i + 1] === color.g && 
+                            pixels[i + 2] === color.b && 
+                            pixels[i + 3] === color.a) {
+                            newPixels[i] = color.r;
+                            newPixels[i + 1] = color.g;
+                            newPixels[i + 2] = color.b;
+                            newPixels[i + 3] = color.a;
+                        } else {
+                            // Make transparent
+                            newPixels[i] = 0;
+                            newPixels[i + 1] = 0;
+                            newPixels[i + 2] = 0;
+                            newPixels[i + 3] = 0;
+                        }
+                    }
+                    
+                    // Clear canvas and draw new image data
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.putImageData(newImageData, 0, 0);
+                    
+                    // Convert to blob
+                    canvas.toBlob((blob) => {
+                        const colorHex = rgbToHex(color.r, color.g, color.b);
+                        colorLayers.push({
+                            blob: blob,
+                            filename: `color_${colorHex.substring(1)}_alpha${color.a}.png`,
+                            color: color,
+                            dataUrl: canvas.toDataURL()
+                        });
+                        
+                        processed++;
+                        const progress = (processed / total) * 100;
+                        progressBar.style.width = progress + '%';
+                        progressText.textContent = `Processing color ${processed} of ${total}...`;
+                        
+                        if (processed === total) {
+                            setTimeout(() => {
+                                progressContainer.style.display = 'none';
+                                displayResults();
+                            }, 500);
+                        }
+                    }, 'image/png');
+                    
+                }, index * 50); // Small delay to prevent browser freezing
+            });
+        }
+
+        function rgbToHex(r, g, b) {
+            return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        }
+
+        function displayResults() {
+            document.getElementById('resultCount').textContent = colorLayers.length;
+            
+            const container = document.getElementById('generatedImages');
+            container.innerHTML = '';
+            
+            colorLayers.forEach(layer => {
+                const div = document.createElement('div');
+                div.className = 'color-layer';
+                
+                const img = document.createElement('img');
+                img.src = layer.dataUrl;
+                img.alt = layer.filename;
+                
+                const filename = document.createElement('div');
+                filename.innerHTML = `<small>${layer.filename}</small>`;
+                
+                const colorSwatch = document.createElement('div');
+                colorSwatch.className = 'color-swatch mx-auto mt-2';
+                colorSwatch.style.backgroundColor = `rgba(${layer.color.r}, ${layer.color.g}, ${layer.color.b}, ${layer.color.a/255})`;
+                
+                div.appendChild(img);
+                div.appendChild(colorSwatch);
+                div.appendChild(filename);
+                container.appendChild(div);
+            });
+            
+            document.getElementById('results').style.display = 'block';
+        }
+
+        document.getElementById('downloadZip').addEventListener('click', downloadZip);
+
+        async function downloadZip() {
+            const zip = new JSZip();
+            
+            for (const layer of colorLayers) {
+                zip.file(layer.filename, layer.blob);
+            }
+            
+            // Add a metadata file
+            const metadata = {
+                originalImage: {
+                    width: originalImage.width,
+                    height: originalImage.height
+                },
+                colors: extractedColors.map(color => ({
+                    r: color.r,
+                    g: color.g,
+                    b: color.b,
+                    a: color.a,
+                    hex: rgbToHex(color.r, color.g, color.b),
+                    pixelCount: color.count
+                })),
+                generatedAt: new Date().toISOString()
+            };
+            
+            zip.file('metadata.json', JSON.stringify(metadata, null, 2));
+            
+            try {
+                const content = await zip.generateAsync({type: 'blob'});
+                const url = URL.createObjectURL(content);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'pixel_art_colors.zip';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error('Error generating ZIP:', error);
+                alert('Error generating ZIP file. Please try again.');
+            }
+        }
+    </script>
+</body>
+</html>
