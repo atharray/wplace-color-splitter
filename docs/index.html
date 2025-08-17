@@ -121,7 +121,6 @@
                     <i class="fas fa-palette me-3" style="color: #7289da;"></i>Pixel Art Color Extractor
                 </h1>
                 <p class="lead" style="color: #b9bbbe;">Extract individual colors from pixel art images into separate PNG layers</p>
-                <p class="lead" style="color: #b9bbbe;">By @ariapokoteng || for wplace</p>
             </div>
 
             <div class="row">
@@ -190,6 +189,7 @@
         let originalImage = null;
         let extractedColors = [];
         let colorLayers = [];
+        let originalFilename = '';
 
         // File upload handling
         const fileInput = document.getElementById('fileInput');
@@ -229,6 +229,9 @@
                 alert('Please select an image file.');
                 return;
             }
+
+            // Store original filename without extension
+            originalFilename = file.name.replace(/\.[^/.]+$/, "");
 
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -354,9 +357,10 @@
                     // Convert to blob
                     canvas.toBlob((blob) => {
                         const colorHex = rgbToHex(color.r, color.g, color.b);
+                        const filename = `${originalFilename}-${colorHex.substring(1)}${color.a < 255 ? `_alpha${color.a}` : ''}.png`;
                         colorLayers.push({
                             blob: blob,
-                            filename: `color_${colorHex.substring(1)}_alpha${color.a}.png`,
+                            filename: filename,
                             color: color,
                             dataUrl: canvas.toDataURL()
                         });
