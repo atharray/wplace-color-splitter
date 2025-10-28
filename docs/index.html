@@ -118,7 +118,6 @@
             word-break: break-all;
         }
 
-        /* --- New Notification Style --- */
         #copyNotification {
             display: none;
             position: fixed;
@@ -353,7 +352,10 @@
                 swatch.style.backgroundColor = `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a/255})`;
                 
                 const percentage = totalPixels > 0 ? (color.count / totalPixels * 100).toFixed(2) : 0;
-                swatch.title = `RGB(${color.r}, ${color.g}, ${color.b}) Alpha: ${color.a}\nPixels: ${color.count}\nUsage: ${percentage}%`;
+                
+                // --- CHANGED: Added Hex value to title ---
+                const hex = rgbToHex(color.r, color.g, color.b);
+                swatch.title = `Hex: ${hex}\nRGB(${color.r}, ${color.g}, ${color.b}) Alpha: ${color.a}\nPixels: ${color.count}\nUsage: ${percentage}%`;
                 
                 // Add click to copy functionality
                 swatch.addEventListener('click', () => {
@@ -398,7 +400,6 @@
 
         // --- Helper Functions ---
 
-        // Changed: Updated copyToClipboard to show notification
         function copyToClipboard(text, element, type = 'single') {
             navigator.clipboard.writeText(text).then(() => {
                 // --- Show top notification ---
@@ -437,7 +438,6 @@
                         element.disabled = false;
                     }, 2000); // 2s for button, 3s for toast is fine.
                 }
-                // Removed the swatch title change as the notification replaces it
                 
             }).catch(err => {
                 console.error('Failed to copy: ', err);
