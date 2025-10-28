@@ -71,6 +71,12 @@
             border: 2px solid #fff;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
             display: inline-block;
+            cursor: pointer;
+            transition: transform 0.1s ease;
+        }
+
+        .color-swatch:hover {
+            transform: scale(1.1);
         }
         
         .progress-container {
@@ -111,9 +117,28 @@
             color: #72767d;
             word-break: break-all;
         }
+
+        /* --- New Notification Style --- */
+        #copyNotification {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #43b581; /* Green success color */
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            z-index: 1050;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            font-weight: 500;
+            transition: opacity 0.3s ease;
+        }
     </style>
 </head>
 <body>
+    <div id="copyNotification">Copied!</div>
+
     <div class="container">
         <div class="main-container p-4">
             <div class="text-center mb-4">
@@ -142,7 +167,22 @@
 
             <div id="colorInfo" style="display: none;">
                 <div class="color-info">
-                    <h5 style="color: #dcddde;"><i class="fas fa-info-circle me-2"></i>Image Analysis</h5>
+                    <h5 style="color: #dcddde;"><i class="fas fa-info-circle me-2"></i>Image Analysis <small style="color: #dcddde; font-size: 0.6em; font-weight: 300;">(Click a color to copy)</small></h5>
+                    
+                    <div class="d-flex justify-content-between align-items-center my-3">
+                        <div>
+                            <label for="sortColors" class="form-label me-2" style="font-size: 0.9rem; color: #b9bbbe; margin-bottom: 0;">Sort by:</label>
+                            <select id="sortColors" class="form-select form-select-sm d-inline-block" style="width: auto; background-color: #40444b; color: #dcddde; border-color: #4f545c;">
+                                <option value="default">Default</option>
+                                <option value="most">Most Used</option>
+                                <option value="least">Least Used</option>
+                            </select>
+                        </div>
+                        <button id="copyAllBtn" class="btn btn-sm" style="background: #7289da; border: none; color: white;">
+                            <i class="fas fa-copy me-1"></i> Copy colors to clipboard (hex)
+                        </button>
+                    </div>
+
                     <p class="mb-2" style="color: #b9bbbe;">Colors detected: <span id="colorCount" class="fw-bold" style="color: #7289da;"></span></p>
                     <div id="colorPalette" class="color-palette"></div>
                 </div>
@@ -187,9 +227,11 @@
     
     <script>
         let originalImage = null;
-        let extractedColors = [];
+        let extractedColors = []; // Array of {r, g, b, a, count, defaultOrder}
+        let totalPixels = 0;
         let colorLayers = [];
         let originalFilename = '';
+        let notificationTimeout = null; // For the new notification
 
         // File upload handling
         const fileInput = document.getElementById('fileInput');
@@ -230,6 +272,9 @@
                 return;
             }
 
+            // Reset sort dropdown
+            document.getElementById('sortColors').value = 'default';
+
             // Store original filename without extension
             originalFilename = file.name.replace(/\.[^/.]+$/, "");
 
@@ -257,6 +302,7 @@
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const pixels = imageData.data;
             const colorMap = new Map();
+            totalPixels = 0; // Reset pixel count
 
             // Extract unique colors
             for (let i = 0; i < pixels.length; i += 4) {
@@ -268,6 +314,7 @@
                 // Skip fully transparent pixels
                 if (a === 0) continue;
                 
+                totalPixels++; // Count non-transparent pixel
                 const colorKey = `${r},${g},${b},${a}`;
                 if (!colorMap.has(colorKey)) {
                     colorMap.set(colorKey, {r, g, b, a, count: 0});
@@ -276,6 +323,9 @@
             }
 
             extractedColors = Array.from(colorMap.values());
+            // Store the default order
+            extractedColors.forEach((color, index) => color.defaultOrder = index);
+            
             displayColorInfo();
         }
 
@@ -284,19 +334,117 @@
             
             const palette = document.getElementById('colorPalette');
             palette.innerHTML = '';
+
+            // Get sort value and sort a copy of the array
+            const sortValue = document.getElementById('sortColors').value;
+            let sortedColors = [...extractedColors];
+
+            if (sortValue === 'most') {
+                sortedColors.sort((a, b) => b.count - a.count);
+            } else if (sortValue === 'least') {
+                sortedColors.sort((a, b) => a.count - b.count);
+            } else {
+                sortedColors.sort((a, b) => a.defaultOrder - b.defaultOrder);
+            }
             
-            extractedColors.forEach(color => {
+            sortedColors.forEach(color => {
                 const swatch = document.createElement('div');
                 swatch.className = 'color-swatch';
                 swatch.style.backgroundColor = `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a/255})`;
-                swatch.title = `RGB(${color.r}, ${color.g}, ${color.b}) Alpha: ${color.a}`;
+                
+                const percentage = totalPixels > 0 ? (color.count / totalPixels * 100).toFixed(2) : 0;
+                swatch.title = `RGB(${color.r}, ${color.g}, ${color.b}) Alpha: ${color.a}\nPixels: ${color.count}\nUsage: ${percentage}%`;
+                
+                // Add click to copy functionality
+                swatch.addEventListener('click', () => {
+                    const hex = rgbToHex(color.r, color.g, color.b);
+                    copyToClipboard(hex, swatch, 'single'); // Pass 'single' type
+                });
+
                 palette.appendChild(swatch);
             });
             
             colorInfo.style.display = 'block';
         }
 
+        // --- New and Modified Event Listeners ---
+
         generateBtn.addEventListener('click', generateColorLayers);
+
+        document.getElementById('sortColors').addEventListener('change', displayColorInfo);
+
+        document.getElementById('copyAllBtn').addEventListener('click', (e) => {
+            const numColors = extractedColors.length;
+            if (numColors > 256) {
+                if (!confirm(`Warning: You are about to copy ${numColors} colors. This might be slow. Continue?`)) {
+                    return;
+                }
+            }
+
+            // Get current sort order to ensure copied list matches display
+            const sortValue = document.getElementById('sortColors').value;
+            let sortedColors = [...extractedColors];
+            if (sortValue === 'most') {
+                sortedColors.sort((a, b) => b.count - a.count);
+            } else if (sortValue === 'least') {
+                sortedColors.sort((a, b) => a.count - b.count);
+            } else {
+                sortedColors.sort((a, b) => a.defaultOrder - b.defaultOrder);
+            }
+            
+            const allColorsText = sortedColors.map(color => rgbToHex(color.r, color.g, color.b)).join('\n');
+            copyToClipboard(allColorsText, e.currentTarget, 'all'); // Pass 'all' type
+        });
+
+        // --- Helper Functions ---
+
+        // Changed: Updated copyToClipboard to show notification
+        function copyToClipboard(text, element, type = 'single') {
+            navigator.clipboard.writeText(text).then(() => {
+                // --- Show top notification ---
+                const notification = document.getElementById('copyNotification');
+                if (notification) {
+                    // Clear existing timeout if one is running
+                    if (notificationTimeout) {
+                        clearTimeout(notificationTimeout);
+                    }
+
+                    // Set message
+                    if (type === 'all') {
+                        notification.textContent = 'All colors copied to clipboard';
+                    } else {
+                        notification.textContent = `${text} copied to clipboard`;
+                    }
+                    
+                    // Show notification
+                    notification.style.display = 'block';
+                    
+                    // Hide after 3 seconds
+                    notificationTimeout = setTimeout(() => {
+                        notification.style.display = 'none';
+                        notificationTimeout = null; // Clear the timeout ID
+                    }, 3000);
+                }
+                // --- End notification ---
+
+                // --- Keep button state change (for "Copy All" button) ---
+                if (element && element.tagName === 'BUTTON') {
+                    const originalText = element.innerHTML;
+                    element.innerHTML = '<i class="fas fa-check me-1"></i> Copied!';
+                    element.disabled = true;
+                    setTimeout(() => {
+                        element.innerHTML = originalText;
+                        element.disabled = false;
+                    }, 2000); // 2s for button, 3s for toast is fine.
+                }
+                // Removed the swatch title change as the notification replaces it
+                
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                alert('Failed to copy to clipboard.');
+            });
+        }
+
 
         function generateColorLayers() {
             if (!originalImage || extractedColors.length === 0) return;
@@ -383,7 +531,7 @@
         }
 
         function rgbToHex(r, g, b) {
-            return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+            return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
         }
 
         function displayResults() {
