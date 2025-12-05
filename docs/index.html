@@ -169,17 +169,28 @@
                     <h5 style="color: #dcddde;"><i class="fas fa-info-circle me-2"></i>Image Analysis <small style="color: #dcddde; font-size: 0.6em; font-weight: 300;">(Click a color to copy)</small></h5>
                     
                     <div class="d-flex justify-content-between align-items-center my-3">
-                        <div>
-                            <label for="sortColors" class="form-label me-2" style="font-size: 0.9rem; color: #b9bbbe; margin-bottom: 0;">Sort by:</label>
-                            <select id="sortColors" class="form-select form-select-sm d-inline-block" style="width: auto; background-color: #40444b; color: #dcddde; border-color: #4f545c;">
-                                <option value="default">Default</option>
-                                <option value="most">Most Used</option>
-                                <option value="least">Least Used</option>
-                            </select>
+                        <div class="d-flex gap-3 align-items-center">
+                            <div>
+                                <label for="sortColors" class="form-label me-2" style="font-size: 0.9rem; color: #b9bbbe; margin-bottom: 0;">Sort by:</label>
+                                <select id="sortColors" class="form-select form-select-sm d-inline-block" style="width: auto; background-color: #40444b; color: #dcddde; border-color: #4f545c;">
+                                    <option value="default">Default</option>
+                                    <option value="most">Most Used</option>
+                                    <option value="least">Least Used</option>
+                                </select>
+                            </div>
+                            <div class="form-check" style="margin-bottom: 0;">
+                                <input class="form-check-input" type="checkbox" id="hideTransparent" style="background-color: #40444b; border-color: #4f545c;">
+                                <label class="form-check-label" for="hideTransparent" style="color: #b9bbbe; font-size: 0.9rem; margin-bottom: 0;">Hide transparent colors</label>
+                            </div>
                         </div>
-                        <button id="copyAllBtn" class="btn btn-sm" style="background: #7289da; border: none; color: white;">
-                            <i class="fas fa-copy me-1"></i> Copy colors to clipboard (hex)
-                        </button>
+                        <div class="d-flex gap-2">
+                            <button id="copyAllBtn" class="btn btn-sm" style="background: #7289da; border: none; color: white;">
+                                <i class="fas fa-copy me-1"></i> Copy colors (hex)
+                            </button>
+                            <button id="copyAllAlphaBtn" class="btn btn-sm" style="background: #5865f2; border: none; color: white;">
+                                <i class="fas fa-copy me-1"></i> Copy with alpha
+                            </button>
+                        </div>
                     </div>
 
                     <p class="mb-2" style="color: #b9bbbe;">Colors detected: <span id="colorCount" class="fw-bold" style="color: #7289da;"></span></p>
@@ -329,14 +340,23 @@
         }
 
         function displayColorInfo() {
-            document.getElementById('colorCount').textContent = extractedColors.length;
+            // Get hide transparent flag
+            const hideTransparent = document.getElementById('hideTransparent').checked;
+            
+            // Filter colors based on transparency setting
+            let filteredColors = extractedColors;
+            if (hideTransparent) {
+                filteredColors = extractedColors.filter(color => color.a === 255);
+            }
+            
+            document.getElementById('colorCount').textContent = filteredColors.length;
             
             const palette = document.getElementById('colorPalette');
             palette.innerHTML = '';
 
             // Get sort value and sort a copy of the array
             const sortValue = document.getElementById('sortColors').value;
-            let sortedColors = [...extractedColors];
+            let sortedColors = [...filteredColors];
 
             if (sortValue === 'most') {
                 sortedColors.sort((a, b) => b.count - a.count);
@@ -385,7 +405,14 @@
 
             // Get current sort order to ensure copied list matches display
             const sortValue = document.getElementById('sortColors').value;
-            let sortedColors = [...extractedColors];
+            const hideTransparent = document.getElementById('hideTransparent').checked;
+            
+            let filteredColors = extractedColors;
+            if (hideTransparent) {
+                filteredColors = extractedColors.filter(color => color.a === 255);
+            }
+            
+            let sortedColors = [...filteredColors];
             if (sortValue === 'most') {
                 sortedColors.sort((a, b) => b.count - a.count);
             } else if (sortValue === 'least') {
@@ -394,9 +421,58 @@
                 sortedColors.sort((a, b) => a.defaultOrder - b.defaultOrder);
             }
             
-            const allColorsText = sortedColors.map(color => rgbToHex(color.r, color.g, color.b)).join('\n');
+            // Deduplicate colors - keep only unique hex values
+            const seen = new Set();
+            const deduplicatedColors = [];
+            sortedColors.forEach(color => {
+                const hex = rgbToHex(color.r, color.g, color.b);
+                if (!seen.has(hex)) {
+                    seen.add(hex);
+                    deduplicatedColors.push(hex);
+                }
+            });
+            
+            const allColorsText = deduplicatedColors.join('\n');
             copyToClipboard(allColorsText, e.currentTarget, 'all'); // Pass 'all' type
         });
+
+        document.getElementById('copyAllAlphaBtn').addEventListener('click', (e) => {
+            const numColors = extractedColors.length;
+            if (numColors > 256) {
+                if (!confirm(`Warning: You are about to copy ${numColors} colors. This might be slow. Continue?`)) {
+                    return;
+                }
+            }
+
+            // Get current sort order to ensure copied list matches display
+            const sortValue = document.getElementById('sortColors').value;
+            const hideTransparent = document.getElementById('hideTransparent').checked;
+            
+            let filteredColors = extractedColors;
+            if (hideTransparent) {
+                filteredColors = extractedColors.filter(color => color.a === 255);
+            }
+            
+            let sortedColors = [...filteredColors];
+            if (sortValue === 'most') {
+                sortedColors.sort((a, b) => b.count - a.count);
+            } else if (sortValue === 'least') {
+                sortedColors.sort((a, b) => a.count - b.count);
+            } else {
+                sortedColors.sort((a, b) => a.defaultOrder - b.defaultOrder);
+            }
+            
+            // Create hex values with alpha channel (format: #RRGGBBAA)
+            const allColorsText = sortedColors.map(color => {
+                const hex = rgbToHex(color.r, color.g, color.b);
+                const alphaHex = color.a.toString(16).padStart(2, '0').toUpperCase();
+                return hex + alphaHex;
+            }).join('\n');
+            
+            copyToClipboard(allColorsText, e.currentTarget, 'all-alpha'); // Pass 'all-alpha' type
+        });
+
+        document.getElementById('hideTransparent').addEventListener('change', displayColorInfo);
 
         // --- Helper Functions ---
 
@@ -412,7 +488,9 @@
 
                     // Set message
                     if (type === 'all') {
-                        notification.textContent = 'All colors copied to clipboard';
+                        notification.textContent = 'Colors copied to clipboard (deduplicated)';
+                    } else if (type === 'all-alpha') {
+                        notification.textContent = 'Colors with alpha copied to clipboard';
                     } else {
                         notification.textContent = `${text} copied to clipboard`;
                     }
